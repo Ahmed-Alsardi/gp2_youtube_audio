@@ -9,8 +9,11 @@ from pytube.exceptions import PytubeError, VideoUnavailable
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-AUDIO_META_CSV = Path("audio_meta.csv")
-URLS_FILE = Path("urls.txt")
+ROOT_PATH = Path("version_0")
+
+AUDIO_META_CSV = ROOT_PATH / "audio_meta.csv"
+URLS_FILE = ROOT_PATH / "urls.txt"
+AUDIO_PATH = ROOT_PATH / "audios"
 
 
 @dataclass
@@ -118,14 +121,23 @@ def read_urls_file(urls_file: Path) -> list:
     return urls
 
 
+def initialize_project_structures() -> None:
+    """This function checks the path structures."""
+    if not ROOT_PATH.exists():
+        logger.info("Creating project structure")
+        ROOT_PATH.mkdir()
+    if not AUDIO_PATH.exists():
+        logger.info("Creating audio path")
+        AUDIO_PATH.mkdir()
+
 if __name__ == "__main__":
+    initialize_project_structures()
     youtube_urls = read_urls_file(URLS_FILE)
-    download_path = Path("audios")
     initialize_csv(AUDIO_META_CSV)
     for url in youtube_urls:
         yt = check_if_audio_exists(url, AUDIO_META_CSV)
         if yt:
-            audio_meta = download_video(yt, download_path)
+            audio_meta = download_video(yt, AUDIO_PATH)
             if audio_meta: # in case of download failure
                 insert_audio_meta_to_csv(audio_meta, AUDIO_META_CSV)
     logger.info("======== Done")
