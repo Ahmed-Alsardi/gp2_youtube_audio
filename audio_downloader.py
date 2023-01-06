@@ -9,6 +9,7 @@ logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 AUDIO_META_CSV = Path("audio_meta.csv")
+URLS_FILE = Path("urls.txt")
 
 
 @dataclass
@@ -89,14 +90,27 @@ def initialize_csv(csv_path: Path) -> None:
         f.write("title,video_id,channel_id\n")
 
 
+def read_urls_file(urls_file: Path) -> list:
+    """This function reads a file and returns the urls.
+
+    Args:
+        urls_file (Path): path to the urls file
+
+    Returns:
+        list: list of urls
+    """
+    if not urls_file.exists():
+        raise FileNotFoundError(f"{urls_file} does not exists")
+    with open(urls_file, "r", encoding="utf-8") as f:
+        urls = f.read().splitlines()
+    return urls
+
+
 if __name__ == "__main__":
-    youtube_url = [
-        "https://www.youtube.com/watch?v=VvZ2JSrouDw",
-        "https://www.youtube.com/watch?v=nl9TZanwbBk",
-    ]
+    youtube_urls = read_urls_file(URLS_FILE)
     download_path = Path("audios")
     initialize_csv(AUDIO_META_CSV)
-    for url in youtube_url:
+    for url in youtube_urls:
         yt = check_if_audio_exists(url, AUDIO_META_CSV)
         if yt:
             audio_meta = download_video(yt, download_path)
