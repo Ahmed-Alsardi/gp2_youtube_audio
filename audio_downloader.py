@@ -1,17 +1,27 @@
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
+import logging
 from pytube import YouTube
-import pandas as pd
+
+
+logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 AUDIO_META_CSV = Path("audio_meta.csv")
 
 
 @dataclass
 class AudioMeta:
+    """This class represents the metadata of the audio."""
     title: str
     video_id: str
     channel_id: str
+
+    @property
+    def get_csv_row(self):
+        """This function returns the csv row of the metadata."""
+        return f"{self.title},{self.video_id},{self.channel_id}\n"
 
 
 def download_video(yt: YouTube, download_path: Path) -> AudioMeta:
@@ -31,58 +41,64 @@ def download_video(yt: YouTube, download_path: Path) -> AudioMeta:
     audio_meta = AudioMeta(
         title=yt.title, video_id=yt.video_id, channel_id=yt.channel_id
     )
+    logger.info("Downloaded `%s`", yt.title)
     return audio_meta
 
 
-def insert_audio_meta_to_csv(audio_meta: AudioMeta, audio_df: pd.DataFrame) -> None:
+def insert_audio_meta_to_csv(audio_meta: AudioMeta, csv_file: Path) -> None:
     """This function inserts the metadata of the audio to a csv file.
 
     Args:
         audio_meta (AudioMeta): metadata of the audio
         csv_path (Path): path to the csv file
     """
-    audio_df = audio_df.append(
-        {
-            "title": audio_meta.title,
-            "video_id": audio_meta.video_id,
-            "channel_id": audio_meta.channel_id,
-        },
-        ignore_index=True,
-    )
-    audio_df.to_csv(AUDIO_META_CSV, index=False)
+    with open(csv_file, "a", encoding="utf-8") as f:
+        f.write(audio_meta.get_csv_row)
+    logger.info("Inserted `%s` to csv file", audio_meta.title)
 
 
-def check_if_audio_exists(video_url: str, audio_df: pd.DataFrame) -> Optional[YouTube]:
+def check_if_audio_exists(video_url: str, csv_path: Path) -> Optional[YouTube]:
     """This function checks if the audio exists in the csv file.
 
     Args:
         video_url (str): youtube video url
-        audio_df (pd.DataFrame): dataframe of the audio metadata
+        csv_path (Path): path to the csv file
 
     Returns:
         bool: youtube object if the audio not exists, otherwise None
     """
     yt = YouTube(video_url)
-    if yt.video_id in audio_df["video_id"].values:
-        return None
+    youtube_id = yt.video_id
+    with open(csv_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if youtube_id in line:
+                logger.info("`%s` audio already exists", yt.title)
+                return None
     return yt
 
 
-def get_audio_dataframe(csv_path: Path) -> pd.DataFrame:
-    """This function returns a dataframe of the audio metadata.
+def initialize_csv(csv_path: Path) -> None:
+    """This function initializes the csv file.
 
     Args:
         csv_path (Path): path to the csv file
-
-    Returns:
-        pd.DataFrame: dataframe of the audio metadata
     """
-    if not csv_path.exists():
-        with open(csv_path, "w", encoding="utf-8") as f:
-            f.write("title,video_id,channel_id")
-    df = pd.read_csv(csv_path, names=["title", "video_id", "channel_id"])
-    return df
+    if csv_path.exists():
+        return
+    with open(csv_path, "w", encoding="utf-8") as f:
+        f.write("title,video_id,channel_id\n")
 
 
 if __name__ == "__main__":
-    pass
+    youtube_url = [
+        "https://www.youtube.com/watch?v=VvZ2JSrouDw",
+        "https://www.youtube.com/watch?v=nl9TZanwbBk",
+    ]
+    download_path = Path("audios")
+    initialize_csv(AUDIO_META_CSV)
+    for url in youtube_url:
+        yt = check_if_audio_exists(url, AUDIO_META_CSV)
+        if yt:
+            audio_meta = download_video(yt, download_path)
+            insert_audio_meta_to_csv(audio_meta, AUDIO_META_CSV)
+    logger.info("======== Done")
