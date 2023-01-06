@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 import logging
 from pytube import YouTube
+from pytube.exceptions import PytubeError, VideoUnavailable
 
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
@@ -15,6 +16,7 @@ URLS_FILE = Path("urls.txt")
 @dataclass
 class AudioMeta:
     """This class represents the metadata of the audio."""
+
     title: str
     video_id: str
     channel_id: str
@@ -36,14 +38,18 @@ def download_video(yt: YouTube, download_path: Path) -> AudioMeta:
         AudioMeta: metadata of the video
     """
     filename = f"{yt.video_id}.mp4"
-    yt.streams.filter(only_audio=True).first().download(
-        download_path, filename=filename
-    )
-    audio_meta = AudioMeta(
-        title=yt.title, video_id=yt.video_id, channel_id=yt.channel_id
-    )
-    logger.info("Downloaded `%s`", yt.title)
-    return audio_meta
+    try:
+        yt.streams.filter(only_audio=True).first().download(
+            download_path, filename=filename
+        )
+        audio_meta = AudioMeta(
+            title=yt.title, video_id=yt.video_id, channel_id=yt.channel_id
+        )
+        logger.info("Downloaded `%s`", yt.title)
+        return audio_meta
+    except PytubeError:
+        logger.error("Failed to download `%s`", yt.title)
+        return None
 
 
 def insert_audio_meta_to_csv(audio_meta: AudioMeta, csv_file: Path) -> None:
@@ -68,14 +74,20 @@ def check_if_audio_exists(video_url: str, csv_path: Path) -> Optional[YouTube]:
     Returns:
         bool: youtube object if the audio not exists, otherwise None
     """
-    yt = YouTube(video_url)
-    youtube_id = yt.video_id
-    with open(csv_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if youtube_id in line:
-                logger.info("`%s` audio already exists", yt.title)
-                return None
-    return yt
+    try:
+        yt = YouTube(video_url)
+        youtube_id = yt.video_id
+        # this will raise an error if the video is unavailable, video_id will not raise an error
+        youtube_title = yt.title 
+        with open(csv_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if youtube_id in line:
+                    logger.info("`%s` audio already exists", youtube_title)
+                    return None
+        return yt
+    except VideoUnavailable:
+        logger.error("Failed to retreieve yt object `%s`", video_url)
+        return None
 
 
 def initialize_csv(csv_path: Path) -> None:
@@ -114,5 +126,6 @@ if __name__ == "__main__":
         yt = check_if_audio_exists(url, AUDIO_META_CSV)
         if yt:
             audio_meta = download_video(yt, download_path)
-            insert_audio_meta_to_csv(audio_meta, AUDIO_META_CSV)
+            if audio_meta: # in case of download failure
+                insert_audio_meta_to_csv(audio_meta, AUDIO_META_CSV)
     logger.info("======== Done")
