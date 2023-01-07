@@ -37,7 +37,7 @@ def get_audio_id(audio_path: Path) -> str:
 
 
 def check_if_subtitle_exist(subtitle_path: Path, audio_id: str) -> bool:
-    subtitle_path = subtitle_path / f"{audio_id}.txt"
+    subtitle_path = subtitle_path / f"{audio_id}.vtt"
     if subtitle_path.exists():
         return True
     return False
@@ -67,6 +67,7 @@ if __name__ == "__main__":
     check_root_path(ROOT_PATH)
     initialize_subtitle(SUBTITLE_PATH)
     audios_path = get_audios_path(AUIDO_PATH)
+    logger.info("Loading model")
     model = load_model()
     for audio_path in audios_path:
         transcribe(model, audio_path, SUBTITLE_PATH)
